@@ -40,7 +40,6 @@ def train_quantile_models(df, split_date="2024-01-01"):
     X_tr, X_val = X_train.iloc[:val_start], X_train.iloc[val_start:]
     y_tr, y_val = y_train.iloc[:val_start], y_train.iloc[val_start:]
 
-<<<<<<< HEAD
     m10 = get_model(objective="quantile", alpha=0.10)
     m90 = get_model(objective="quantile", alpha=0.90)
 
@@ -59,19 +58,3 @@ def train_quantile_models(df, split_date="2024-01-01"):
     )
 
     return (m10, m90), X_test, y_test, close_test
-=======
-    return model, X_test, y_test
-
-def train_and_save(df, ticker="AMZN", split_date="2024-01-01"):
-    model, X_test, y_test = train_model(df, split_date=split_date)  # your existing function
-
-    # Save model
-    project_root = Path(__file__).resolve().parent.parent
-    models_dir = project_root / "models"
-    models_dir.mkdir(exist_ok=True)
-
-    model_path = models_dir / f"{ticker}_model.joblib"
-    joblib.dump(model, model_path)
-
-    return model, model_path, X_test, y_test
->>>>>>> origin/main
