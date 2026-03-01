@@ -34,6 +34,7 @@ def build_features(price_df: pd.DataFrame,
     # ---------------------------
     df = price_df.copy()
     df = df.sort_values("date").reset_index(drop=True)
+    df.columns = df.columns.str.replace(" ", "_")
 
     # Ensure datetime
     df["date"] = pd.to_datetime(df["date"])
