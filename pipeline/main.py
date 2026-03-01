@@ -10,6 +10,7 @@ df = fe.build_features(price_df, news_df)
 
 (models, X_test, y_test, close_test) = train_quantile_models(df, split_date="2024-01-01")
 
+<<<<<<< HEAD
 # ======================
 # DEBUG SECTION
 # ======================
@@ -35,3 +36,11 @@ coverage, width, miss_penalty = evaluate_interval(models, X_test, y_test, close_
 print("Coverage (true in range):", coverage)
 print("Avg $ width:", width)
 print("Miss penalty:", miss_penalty)
+=======
+print("RMSE:", rmse)
+print("Directional Accuracy:", direction)
+
+ticker = "AMZN"  # or pass in
+model, model_path, X_test, y_test = train.train_and_save(df, ticker=ticker)
+print("Saved model to:", model_path)
+>>>>>>> origin/main
