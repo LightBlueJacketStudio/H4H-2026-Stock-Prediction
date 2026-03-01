@@ -13,3 +13,7 @@ rmse, direction = evaluate.evaluate(model, X_test, y_test)
 
 print("RMSE:", rmse)
 print("Directional Accuracy:", direction)
+
+ticker = "AMZN"  # or pass in
+model, model_path, X_test, y_test = train.train_and_save(df, ticker=ticker)
+print("Saved model to:", model_path)
