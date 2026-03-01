@@ -69,17 +69,28 @@ def load_model_for_ticker(ticker: str):
         return None, model_path
 
 
-def align_X_to_model(model, X: pd.DataFrame) -> pd.DataFrame:
+def align_X_to_model(model_bundle, X: pd.DataFrame) -> pd.DataFrame:
     """
-    LightGBM sklearn wrapper often has feature_names_in_ after fit.
-    Align columns to match training columns to avoid shape/order issues.
+    Align to training columns (prefer feature_columns saved in joblib),
+    otherwise fall back to feature_names_in_ on one of the models.
     """
-    if hasattr(model, "feature_names_in_"):
-        cols = list(model.feature_names_in_)
+    # model_bundle is a dict: {"model_q10":..., "model_q90":..., "feature_columns":[...]}
+    cols = None
+
+    if isinstance(model_bundle, dict) and "feature_columns" in model_bundle:
+        cols = list(model_bundle["feature_columns"])
+    else:
+        # fallback: use feature_names_in_ from q10 if available
+        m = model_bundle["model_q10"] if isinstance(model_bundle, dict) else model_bundle
+        if hasattr(m, "feature_names_in_"):
+            cols = list(m.feature_names_in_)
+
+    if cols is not None:
         for c in cols:
             if c not in X.columns:
                 X[c] = 0.0
         X = X[cols]
+
     return X
 
 
@@ -100,47 +111,108 @@ def compute_real_outputs(ticker: str, ohlcv: pd.DataFrame, news_daily: pd.DataFr
 
     # Latest row inference (predict next-day return)
     latest = feat_df.iloc[[-1]].copy()
-    X_latest = latest.drop(columns=["y", "date"], errors="ignore")
+    X_latest = latest.drop(columns=["y_ret", "date"], errors="ignore")
     X_latest = align_X_to_model(model, X_latest)
 
-    pred_ret = float(model.predict(X_latest)[0])  # next-day return prediction
+    #Amy's code
+    # pred_ret = float(model.predict(X_latest)[0])  # next-day return prediction
 
-    # Current + delta from OHLCV (true market values)
-    close = ohlcv["Close"].astype(float)
+    # # Current + delta from OHLCV (true market values)
+    # close = ohlcv["Close"].astype(float)
 
-    current = float(close.iloc[-1])
-    prev = float(close.iloc[-2]) if len(close) > 1 else current
-    delta = current - prev
-    delta_pct = (delta / prev * 100) if prev else 0.0
+    # current = float(close.iloc[-1])
+    # prev = float(close.iloc[-2]) if len(close) > 1 else current
+    # delta = current - prev
+    # delta_pct = (delta / prev * 100) if prev else 0.0
 
-    # Convert predicted return -> predicted close (center)
-    pred_close = current * (1.0 + pred_ret)
+    # # Convert predicted return -> predicted close (center)
+    # pred_close = current * (1.0 + pred_ret)
 
-    # Use a volatility estimate for a range band.
-    # Prefer engineered rolling std if present (ret_std_20), else compute quickly.
-    if "ret_std_20" in feat_df.columns:
-        vol20 = float(feat_df["ret_std_20"].iloc[-1])
-    else:
-        vol20 = float(close.pct_change().rolling(20).std().iloc[-1])
+    # # Use a volatility estimate for a range band.
+    # # Prefer engineered rolling std if present (ret_std_20), else compute quickly.
+    # if "ret_std_20" in feat_df.columns:
+    #     vol20 = float(feat_df["ret_std_20"].iloc[-1])
+    # else:
+    #     vol20 = float(close.pct_change().rolling(20).std().iloc[-1])
 
-    if np.isnan(vol20):
-        vol20 = 0.0
+    # if np.isnan(vol20):
+    #     vol20 = 0.0
 
-    band = pred_close * (2.0 * vol20)  # 2-sigma band
-    pred_low = pred_close - band
-    pred_high = pred_close + band
+    # band = pred_close * (2.0 * vol20)  # 2-sigma band
+    # pred_low = pred_close - band
+    # pred_high = pred_close + band
 
     # Confidence (regression -> proxy)
     # Stronger predicted return relative to volatility => higher confidence.
-    z = pred_ret / (vol20 + 1e-6)
-    conf = float(np.clip(sigmoid(z), 0.05, 0.95))
+
+    #sean's tweak
+    bundle, model_path = load_model_for_ticker(ticker)
+    if bundle is None:
+        return None, feat_df, model_path, None
+
+    m10 = bundle["model_q10"]
+    m90 = bundle["model_q90"]
+
+    latest = feat_df.iloc[[-1]].copy()
+    X_latest = latest.drop(columns=["y_ret", "date"], errors="ignore")
+    X_latest = align_X_to_model(bundle, X_latest)
+
+    r10 = float(m10.predict(X_latest)[0])
+    r90 = float(m90.predict(X_latest)[0])
+
+    # ensure ordering
+    r_low, r_high = (min(r10, r90), max(r10, r90))
+    close_series = ohlcv["Close"].astype(float)
+    current = float(close_series.iloc[-1])
+    prev = float(close_series.iloc[-2]) if len(close_series) > 1 else current
+    delta = current - prev
+    delta_pct = (delta / prev * 100) if prev else 0.0
+
+    # log-return -> price bounds
+    pred_low = current * np.exp(r_low)
+    pred_high = current * np.exp(r_high)
+
+    # optional center for display
+    pred_close = current * np.exp(0.5 * (r_low + r_high))
+    pred_ret = 0.5 * (r_low + r_high)
+
+    #amy
+    # z = pred_ret / (vol20 + 1e-6)
+    # conf = float(np.clip(sigmoid(z), 0.05, 0.95))
+
+    # # Risk from volatility
+    # risk_score = int(np.clip(vol20 * 1200, 0, 100))
+    # risk_label = "Low" if risk_score < 35 else "Medium" if risk_score < 70 else "High"
+
+    # # Momentum (5d) for helpful info
+    # mom5 = float(close.pct_change(5).iloc[-1]) if len(close) > 6 else 0.0
+    # if np.isnan(mom5):
+    #     mom5 = 0.0
+        # Volatility (20d)
+
+    #sean
+    if "ret_std_20" in feat_df.columns:
+        vol20 = float(feat_df["ret_std_20"].iloc[-1])
+    else:
+        vol20 = float(close_series.pct_change().rolling(20).std().iloc[-1])
+    if np.isnan(vol20):
+        vol20 = 0.0
+
+    # Confidence (recommended): narrower predicted band => higher confidence
+    interval_width = float(pred_high - pred_low)
+    width_ratio = interval_width / (current + 1e-6)
+    conf = float(np.clip(1.0 - width_ratio * 5.0, 0.05, 0.95))
+
+    # If you prefer your old z-score confidence, use this instead:
+    # z = pred_ret / (vol20 + 1e-6)
+    # conf = float(np.clip(sigmoid(z), 0.05, 0.95))
 
     # Risk from volatility
     risk_score = int(np.clip(vol20 * 1200, 0, 100))
     risk_label = "Low" if risk_score < 35 else "Medium" if risk_score < 70 else "High"
 
-    # Momentum (5d) for helpful info
-    mom5 = float(close.pct_change(5).iloc[-1]) if len(close) > 6 else 0.0
+    # Momentum (5d)
+    mom5 = float(close_series.pct_change(5).iloc[-1]) if len(close_series) > 6 else 0.0
     if np.isnan(mom5):
         mom5 = 0.0
 
@@ -162,7 +234,7 @@ def compute_real_outputs(ticker: str, ohlcv: pd.DataFrame, news_daily: pd.DataFr
 
     return p, feat_df, model_path, model
 
-def build_prediction_history(feat_df, model, lookback=15):
+def AMY_build_prediction_history(feat_df, model, lookback=15):
     """
     Build historical prediction vs actual comparison table.
     Since y is next-day return, align predictions to next day's close.
@@ -175,7 +247,7 @@ def build_prediction_history(feat_df, model, lookback=15):
     # Use last N rows for display
     df = df.tail(lookback + 1).reset_index(drop=True)
 
-    X = df.drop(columns=["y", "date"], errors="ignore")
+    X = df.drop(columns=["y_ret", "date"], errors="ignore")
 
     if hasattr(model, "feature_names_in_"):
         X = X[model.feature_names_in_]
@@ -205,7 +277,7 @@ def build_prediction_history(feat_df, model, lookback=15):
         "Actual Close": 2,
         "% Error": 2
     })
-def build_model_band_chart(feat_df: pd.DataFrame, model, lookback: int = 140) -> pd.DataFrame:
+def AMY_build_model_band_chart(feat_df: pd.DataFrame, model, lookback: int = 140) -> pd.DataFrame:
     """
     Build a true *model-based* historical prediction band.
 
@@ -221,7 +293,7 @@ def build_model_band_chart(feat_df: pd.DataFrame, model, lookback: int = 140) ->
     df = df.tail(lookback).reset_index(drop=True)
 
     # X for all rows
-    X_all = df.drop(columns=["y", "date"], errors="ignore")
+    X_all = df.drop(columns=["y_ret", "date"], errors="ignore")
     X_all = align_X_to_model(model, X_all)
 
     pred_ret = model.predict(X_all).astype(float)
@@ -261,6 +333,107 @@ def build_model_band_chart(feat_df: pd.DataFrame, model, lookback: int = 140) ->
 
     return out
 
+def build_prediction_history(feat_df, bundle, lookback=15):
+    """
+    Historical prediction vs actual comparison table.
+
+    - bundle: {"model_q10":..., "model_q90":..., optional "feature_columns":...}
+    - Target is log-return, so price = Close_t * exp(pred_logret)
+    - Predictions at time t correspond to actual close at t+1
+    """
+    df = feat_df.sort_values("date").reset_index(drop=True)
+    if len(df) < 10:
+        return pd.DataFrame()
+
+    df = df.tail(lookback + 1).reset_index(drop=True)
+
+    m10 = bundle["model_q10"]
+    m90 = bundle["model_q90"]
+
+    X = df.drop(columns=["y_ret", "date"], errors="ignore")
+    X = align_X_to_model(bundle, X)
+
+    r10 = m10.predict(X).astype(float)
+    r90 = m90.predict(X).astype(float)
+
+    r_low = np.minimum(r10, r90)
+    r_high = np.maximum(r10, r90)
+
+    # Use midpoint (center log-return) as point prediction
+    r_mid = 0.5 * (r_low + r_high)
+
+    # predicted close at time t
+    pred_close_t = df["Close"].astype(float).values * np.exp(r_mid)
+
+    # Align to next-day actual close
+    table = pd.DataFrame({
+        "date": df["date"].iloc[1:].values,
+        "Predicted Close": pred_close_t[:-1],
+        "Actual Close": df["Close"].astype(float).iloc[1:].values,
+    })
+
+    table["% Error"] = (
+        (table["Predicted Close"] - table["Actual Close"])
+        / table["Actual Close"] * 100
+    )
+
+    table = table.sort_values("date", ascending=False).reset_index(drop=True)
+
+    return table.round({
+        "Predicted Close": 2,
+        "Actual Close": 2,
+        "% Error": 2
+    })
+
+def build_model_band_chart(feat_df: pd.DataFrame, bundle, lookback: int = 140) -> pd.DataFrame:
+    """
+    True model-based historical prediction band using quantile models (Q10/Q90).
+
+    Target is log-return:
+      pred_low_t  = Close_t * exp(r_low_t)
+      pred_high_t = Close_t * exp(r_high_t)
+
+    Align prediction at t to actual close at t+1.
+    """
+    df = feat_df.copy().sort_values("date").reset_index(drop=True)
+    if len(df) < 5:
+        return pd.DataFrame()
+
+    df = df.tail(lookback).reset_index(drop=True)
+
+    m10 = bundle["model_q10"]
+    m90 = bundle["model_q90"]
+
+    X_all = df.drop(columns=["y_ret", "date"], errors="ignore")
+    X_all = align_X_to_model(bundle, X_all)
+
+    r10 = m10.predict(X_all).astype(float)
+    r90 = m90.predict(X_all).astype(float)
+
+    r_low = np.minimum(r10, r90)
+    r_high = np.maximum(r10, r90)
+
+    close_t = df["Close"].astype(float).values
+
+    pred_low_t = close_t * np.exp(r_low)
+    pred_high_t = close_t * np.exp(r_high)
+
+    out = pd.DataFrame({
+        "date_t": df["date"].values,
+        "actual_close_t": close_t,
+        "pred_low_t": pred_low_t,
+        "pred_high_t": pred_high_t,
+    })
+
+    # Align: prediction from t is for t+1
+    out = out.iloc[:-1].copy()
+    out["date"] = df["date"].iloc[1:].values
+    out["actual_close"] = df["Close"].astype(float).iloc[1:].values
+
+    out = out.rename(columns={"pred_low_t": "pred_low", "pred_high_t": "pred_high"})
+    out = out[["date", "actual_close", "pred_low", "pred_high"]].dropna()
+
+    return out
 
 def render_dashboard(go_home):
     st.set_page_config(page_title="Glimpse Dashboard", layout="wide")
@@ -360,7 +533,28 @@ def render_dashboard(go_home):
 
     with c2:
         st.subheader("Predicted Close Price Range")
-        st.write(f"### ${p['pred_low']:.2f} – ${p['pred_high']:.2f}")
+        # st.write(f"### ${p['pred_low']:.2f} – ${p['pred_high']:.2f}")
+        current = p["current_price"]
+        low = p["pred_low"]
+        high = p["pred_high"]
+
+        low_color = "#22c55e" if low > current else "#ef4444"
+        high_color = "#22c55e" if high > current else "#ef4444"
+
+        st.markdown(
+            f"""
+            <h2>
+                <span style="color:{low_color}; font-weight:600;">
+                    ${low:.2f}
+                </span>
+                –
+                <span style="color:{high_color}; font-weight:600;">
+                    ${high:.2f}
+                </span>
+            </h2>
+            """,
+            unsafe_allow_html=True
+        )
         if using_placeholders:
             st.caption("Placeholder range from recent volatility.")
         else:

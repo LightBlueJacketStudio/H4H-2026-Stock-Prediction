@@ -2,7 +2,7 @@ import pandas as pd
 from . import feature_engineer as fe
 from .train import train_quantile_models
 from .evaluate import evaluate_interval
-
+ticker = "AMZN"
 price_df = pd.read_parquet("data/raw_ohlcv.parquet")
 news_df  = pd.read_parquet("data/news_daily.parquet")
 
@@ -35,3 +35,20 @@ coverage, width, miss_penalty = evaluate_interval(models, X_test, y_test, close_
 print("Coverage (true in range):", coverage)
 print("Avg $ width:", width)
 print("Miss penalty:", miss_penalty)
+
+print("creating joblib")
+import joblib
+
+(models, X_test, y_test, close_test) = train_quantile_models(df, split_date="2024-01-01")
+
+m10, m90 = models
+
+joblib.dump(
+    {
+        "model_q10": m10,
+        "model_q90": m90,
+    },
+    f"models/{ticker}_model.joblib"
+)
+
+print(f"Model saved to models/{ticker}_model.joblib")
