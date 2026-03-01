@@ -39,10 +39,23 @@ def build_features(
     # 1) Returns + TARGET
     # ---------------------------
     df["ret1"] = df["Close"].pct_change()
+    # Volatility regime features
+    df["rv_5"]  = df["ret1"].rolling(5).std()
+    df["rv_20"] = df["ret1"].rolling(20).std()
+    df["rv_60"] = df["ret1"].rolling(60).std()
 
+    # Tail / jump indicators
+    df["absret_max_20"] = df["ret1"].abs().rolling(20).max()
+    df["absret_max_60"] = df["ret1"].abs().rolling(60).max()
+
+    # EWMA vol (often very predictive for next-day range)
+    df["ewm_vol_20"] = df["ret1"].ewm(span=20, adjust=False).std()
+
+    # Recent shock (yesterday absolute return)
+    df["absret_1"] = df["ret1"].abs()
     # ✅ Target for quantiles: tomorrow return
     # r_{t+1} = Close_{t+1}/Close_t - 1
-    df["y_ret"] = df["Close"].shift(-1) / df["Close"] - 1
+    df["y_ret"] = np.log(df["Close"].shift(-1) / df["Close"])
 
     # ---------------------------
     # 2) Lag features
