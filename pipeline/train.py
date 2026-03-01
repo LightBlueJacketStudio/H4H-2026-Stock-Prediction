@@ -1,5 +1,8 @@
 from models import model as mdl
 import pandas as pd
+from pathlib import Path
+import joblib
+
 
 def train_model(df, split_date="2024-01-01"):
     df = df.copy()
@@ -51,3 +54,16 @@ def train_model(df, split_date="2024-01-01"):
         print("Train score (sanity):", train_score)
 
     return model, X_test, y_test
+
+def train_and_save(df, ticker="AMZN", split_date="2024-01-01"):
+    model, X_test, y_test = train_model(df, split_date=split_date)  # your existing function
+
+    # Save model
+    project_root = Path(__file__).resolve().parent.parent
+    models_dir = project_root / "models"
+    models_dir.mkdir(exist_ok=True)
+
+    model_path = models_dir / f"{ticker}_model.joblib"
+    joblib.dump(model, model_path)
+
+    return model, model_path, X_test, y_test
