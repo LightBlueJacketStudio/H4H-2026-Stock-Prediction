@@ -26,6 +26,19 @@ put the API key under .env as <FINHUB_API_KEY="YOUR_API_KEY">
 python aggregator.py
 ```
 
+# Glimpse – UI (Streamlit Frontend)
+1. You need to install
+
+```
+pip install streamlit
+pip install protobuf==3.20.3
+pip install altair
+```
+2. run stream_lit app
+```
+streamlit run streamlit_app/app.py
+
+
 
 use 
 ```
