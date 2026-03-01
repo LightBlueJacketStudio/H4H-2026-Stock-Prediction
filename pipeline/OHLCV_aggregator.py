@@ -8,66 +8,63 @@ from pathlib import Path
 SYMBOL = "AMZN"
 START_DATE = "2020-01-01"
 END_DATE = None   # None = today
-INTERVAL = "1d"   # 1d for daily (hackathon safe)
+INTERVAL = "1d"   # daily
 OUTPUT_PATH = Path("./data/raw_ohlcv.parquet")
 
 
-def fetch_ohlcv(symbol, start, end=None, interval="1d"):
+def fetch_ohlcv(symbol: str, start: str, end: str | None = None, interval: str = "1d") -> pd.DataFrame:
     print(f"Fetching {symbol} data from yfinance...")
-    
+
     df = yf.download(
         symbol,
         start=start,
         end=end,
         interval=interval,
         auto_adjust=False,
-        progress=False
+        progress=False,
+        group_by="column",  # helps keep columns consistent
     )
 
     if df.empty:
         raise ValueError("No data downloaded.")
 
-    # Reset index to make Date a column
-    df.reset_index(inplace=True)
+    # ✅ Keep behavior from your original snippet:
+    # yfinance sometimes returns MultiIndex columns (e.g., when multiple tickers or some settings)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
-    # Rename to standardized schema
-    df.rename(columns={
-        "Date": "date",
-        "Open": "Open",
-        "High": "High",
-        "Low": "Low",
-        "Close": "Close",
-        "Adj Close": "Adj Close",
-        "Volume": "Volume"
-    }, inplace=True)
+    # Reset index to make Date a column (same as your snippet)
+    df = df.reset_index()
 
-    # Ensure datetime type
+    # Standardize schema
+    df = df.rename(columns={"Date": "date"})
+
+    # Ensure datetime + sorted
     df["date"] = pd.to_datetime(df["date"])
-
-    # Sort just in case
     df = df.sort_values("date").reset_index(drop=True)
 
     return df
 
 
-def validate_ohlcv(df):
+def validate_ohlcv(df: pd.DataFrame) -> None:
     required_cols = ["date", "Open", "High", "Low", "Close", "Adj Close", "Volume"]
-    for col in required_cols:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column: {col}")
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
 
-    if df.isnull().sum().sum() > 0:
-        print("Warning: NaN values detected.")
+    if df[required_cols].isnull().any().any():
+        print("Warning: NaN values detected in required columns.")
 
     print("Validation passed.")
 
 
 def main():
     df = fetch_ohlcv(SYMBOL, START_DATE, END_DATE, INTERVAL)
-
     validate_ohlcv(df)
 
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(OUTPUT_PATH, index=False)
+
     print(f"Saved OHLCV data to {OUTPUT_PATH}")
     print(df.tail())
 
