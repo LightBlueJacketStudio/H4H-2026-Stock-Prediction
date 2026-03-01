@@ -25,3 +25,13 @@ put the API key under .env as <FINHUB_API_KEY="YOUR_API_KEY">
 ```
 python aggregator.py
 ```
+
+
+use 
+```
+python -m test.test_feature
+```
+to see the intermediate result
+-m: always treat project root as working dir
+tes.test_feature: module calling
+__init__.py is necessary for a folder to be treated as module, then we can use import from that folder
