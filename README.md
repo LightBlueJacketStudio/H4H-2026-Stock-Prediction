@@ -1,4 +1,4 @@
-Steps to Run:
+Setting up Environments:
 
 1. set up and activate virtual Environment
 must use python 3.11
@@ -21,9 +21,25 @@ create a file called ".env"
 put the API key under .env as <FINHUB_API_KEY="YOUR_API_KEY">
 ```
 
-4. Run Aggregator.py to test the connection of everything
+
+Prepare the backend Data:
+1. Change Your Directory to Project Root
 ```
-python aggregator.py
+cd <path to H4H-2026-Stock-Prediction>
+```
+2. Get Price Data
+```
+python .\pipeline\OHLCV_aggregator.py
+```
+
+3. Get News Data
+```
+python .\pipeline\news_aggregator.py
+```
+
+4. Inference:
+```
+python -m pipeline.main
 ```
 
 # Glimpse – UI (Streamlit Frontend)
@@ -37,7 +53,7 @@ pip install altair
 2. run stream_lit app
 ```
 streamlit run streamlit_app/app.py
-
+```
 
 
 use 

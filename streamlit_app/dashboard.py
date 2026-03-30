@@ -637,7 +637,8 @@ def render_dashboard(go_home):
             st.info("Prediction history requires a trained model.")
     with r3_mid:
         st.subheader("Helpful Information")
-        st.write(f"- **Model:** {p.get('model_name', 'LightGBM')}")
+        # st.write(f"- **Model:** {p.get('model_name', 'LightGBM')}")
+        st.write(f"- **Model:** LightGBM Quantile Regressor Bundle")
         st.write(f"- **Volatility (20d):** {p['vol20']:.4f}")
         st.write(f"- **Momentum (5d):** {p['mom5']:.4f}")
         st.write("- **Data Sources:** yfinance OHLCV + Finnhub headlines → sentiment aggregates")
