@@ -106,7 +106,7 @@ def aggregate_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
     return daily
 
 
-def main():
+def aggregate_news():
     end = date.today()
     start = end - timedelta(days=DAYS_BACK)
 
@@ -129,4 +129,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    aggregate_news()

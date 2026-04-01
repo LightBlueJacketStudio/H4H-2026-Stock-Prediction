@@ -58,7 +58,7 @@ def validate_ohlcv(df: pd.DataFrame) -> None:
     print("Validation passed.")
 
 
-def main():
+def aggregate_price():
     df = fetch_ohlcv(SYMBOL, START_DATE, END_DATE, INTERVAL)
     validate_ohlcv(df)
 
@@ -70,4 +70,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    aggregate_price()
