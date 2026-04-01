@@ -1,4 +1,4 @@
-Setting up Environments:
+# Set up Environments:
 
 1. set up and activate virtual Environment
 must use python 3.11
@@ -22,22 +22,13 @@ put the API key under .env as <FINHUB_API_KEY="YOUR_API_KEY">
 ```
 
 
-Prepare the backend Data:
+# Train the model:
 1. Change Your Directory to Project Root
 ```
 cd <path to H4H-2026-Stock-Prediction>
 ```
-2. Get Price Data
-```
-python .\pipeline\OHLCV_aggregator.py
-```
 
-3. Get News Data
-```
-python .\pipeline\news_aggregator.py
-```
-
-4. Inference:
+2. Inference:
 ```
 python -m pipeline.main
 ```
